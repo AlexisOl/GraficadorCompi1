@@ -1,0 +1,132 @@
+package Analizadores;
+
+import java_cup.runtime.Symbol;
+import GUI.*;
+import Reportes.ReporteErrores;
+
+parser code
+{:
+
+    public parser(AnalizadorLexico lexer) {
+            super(lexer);
+    }
+    public void syntax_error(Symbol s) {
+            tabla.agregarError(String.valueOf(s.value), s.left, s.right, "ERRORLEXICO");
+        }
+
+    private ReporteErrores tabla = new ReporteErrores();
+    private GeneracionGraficas graficas = new GeneracionGraficas();
+
+    public void setTabla(ReporteErrores tabla){
+            this.tabla = tabla;
+    }
+
+
+
+    public void setGraficas(GeneracionGraficas graficas){
+                this.graficas = graficas;
+        }
+
+:};
+
+
+
+// seccion de terminales
+
+//terminales:
+
+
+terminal DEFINICIONES,DOSPUNTO, PUNTOCOMA, BARRA, PIE, TITULO, EJEX, EJEY, ETIQUETAS, VALORES, UNIR, TIPO,TOTAL, EXTRA, EJECUTAR, ESPACIOS, COMENTARIOS,  PARENTESISABIERTO, PARENTESISCERRADO, LLAVESABIERTO, LLAVESCERRADO, CORCHETESABIERTO, CORCHETESCERRADO, PUNTO, COMA, SUMA, RESTA, MULTIPLICACION, DIVISION, ERROR;
+terminal Double  ENTEROS,DECIMAL;
+terminal String CADENAS, PORCENTAJE, CANTIDAD;
+
+// seccion de no termimales
+non terminal s, sBarras, sBarrasSintaxis, sPie, sPieSintaxis,sUnir, sEjexSintaxis, sEjeySintaxis,sEjecutar;
+non terminal Double valorNumerico;
+non terminal Double sTipoNumero;
+non terminal String sTipo;
+// para los operadores aritmeticos se tiene una precedencia:
+precedence left  SUMA, RESTA;
+precedence left  MULTIPLICACION, DIVISION;
+
+//estado inicial del analizador sintactico
+start with s;
+
+s ::=
+        DEFINICIONES sBarras s
+    |   DEFINICIONES sPie s
+    |   EJECUTAR sEjecutar s
+    |// nada
+;
+// estado general de las barras
+sBarras ::=
+   BARRA:b LLAVESABIERTO sBarrasSintaxis LLAVESCERRADO {: graficas.agregarGrafica(1, bleft, bright);:}
+;
+
+sBarrasSintaxis ::=
+        TITULO DOSPUNTO CADENAS:c PUNTOCOMA sBarrasSintaxis{: graficas.ingresodeTextoGrafica(c, 1, cleft, cright); :}
+    |  EJEX:x DOSPUNTO CORCHETESABIERTO sEjexSintaxis CORCHETESCERRADO PUNTOCOMA sBarrasSintaxis   {:graficas.ingresoCadena(1,xleft,xright);:}
+    | EJEY:y DOSPUNTO CORCHETESABIERTO sEjeySintaxis CORCHETESCERRADO PUNTOCOMA sBarrasSintaxis  {: graficas.asignarNumeros(1, yleft, yright); :}
+    | UNIR:u DOSPUNTO CORCHETESABIERTO sUnir CORCHETESCERRADO PUNTOCOMA sBarrasSintaxis {: graficas.crearUniones(1, uleft, uright); :}
+    | // epsilon
+;
+
+sPie ::=
+    PIE:p LLAVESABIERTO sPieSintaxis LLAVESCERRADO{: graficas.agregarGrafica(2, pleft, pright);:}
+;
+sPieSintaxis ::=
+        TITULO DOSPUNTO CADENAS:c PUNTOCOMA sPieSintaxis  {: graficas.ingresodeTextoGrafica(c, 2, cleft, cright); :}
+    |  TIPO   DOSPUNTO sTipo:c   PUNTOCOMA sPieSintaxis  {: graficas.ingresodeTextoGrafica(c, 3, cleft, cright); :}
+   	| ETIQUETAS:x DOSPUNTO CORCHETESABIERTO sEjexSintaxis CORCHETESCERRADO PUNTOCOMA sPieSintaxis {:graficas.ingresoCadena(2,xleft,xright);:}
+    | VALORES:y DOSPUNTO CORCHETESABIERTO sEjeySintaxis  CORCHETESCERRADO PUNTOCOMA sPieSintaxis {: graficas.asignarNumeros(2, yleft, yright); :}
+   	| TOTAL DOSPUNTO  valorNumerico:e  PUNTOCOMA sPieSintaxis {:RESULT = e; graficas.ingresoTotal(e, eleft, eright);:}
+    | UNIR:u DOSPUNTO CORCHETESABIERTO sUnir CORCHETESCERRADO PUNTOCOMA sPieSintaxis {: graficas.crearUniones(2, uleft, uright); :}
+    |  EXTRA DOSPUNTO CADENAS:c PUNTOCOMA sPieSintaxis{: graficas.ingresodeTextoGrafica(c, 4, cleft, cright); :}
+    | // epsilon
+;
+
+sEjexSintaxis ::=
+        CADENAS:cadena COMA sEjexSintaxis {: graficas.agregarCadenas(cadena); :}
+    |  CADENAS:cadena {: graficas.agregarCadenas(cadena); :}
+;
+
+sEjeySintaxis ::=
+    valorNumerico:e COMA sEjeySintaxis {:RESULT = e; graficas.agregarNumeros(e);:}
+    | valorNumerico:e  {:RESULT = e; graficas.agregarNumeros(e);:}
+;
+
+sUnir::=
+    LLAVESABIERTO valorNumerico:entero1 COMA valorNumerico:entero2 LLAVESCERRADO COMA sUnir{:graficas.agregarEntero(entero1, entero2); :}
+   | LLAVESABIERTO valorNumerico:entero1 COMA valorNumerico:entero2 LLAVESCERRADO {: graficas.agregarEntero(entero1, entero2);:}
+;
+
+
+sTipo::=
+    CANTIDAD:c {:RESULT = c;:}
+    | PORCENTAJE:c{:RESULT = c;:}
+;
+
+sTipoNumero::=
+        ENTEROS:n {:RESULT = n;:}
+    | DECIMAL:d {:RESULT = d;:}
+;
+
+
+
+valorNumerico::=
+    sTipoNumero:n {: RESULT = n; :}
+        | valorNumerico:e1 SUMA:o valorNumerico:e2
+                    {: RESULT = e1 + e2;:}
+        |valorNumerico:e1 RESTA:o valorNumerico:e2
+                    {: RESULT = e1 - e2;:}
+        | valorNumerico:e1 MULTIPLICACION:o valorNumerico:e2
+                    {: RESULT = e1 * e2;:}
+        |  valorNumerico:e1 DIVISION:o valorNumerico:e2
+                    {: RESULT = e1 / e2;:}
+        | PARENTESISABIERTO valorNumerico:e PARENTESISCERRADO
+                    {:RESULT = e;:}
+;
+
+sEjecutar::=
+    PARENTESISABIERTO CADENAS:c PARENTESISCERRADO PUNTOCOMA {:graficas.agregarEjecucion(c, cleft, cright); :}
+;
